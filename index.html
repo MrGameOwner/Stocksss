@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>STOCK///OVERVIEW</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="crt-shell">
+      <header class="topbar">
+        <div class="brand">[ STOCK///OVERVIEW ]</div>
+        <div class="status" id="statusText">READY</div>
+      </header>
+
+      <section class="controls">
+        <label for="symbolInput">SYMBOL</label>
+        <input id="symbolInput" type="text" value="IBM" maxlength="10" />
+
+        <label for="apiKeyInput">ALPHA VANTAGE KEY</label>
+        <input id="apiKeyInput" type="password" placeholder="ENTER API KEY" />
+
+        <button id="loadBtn">LOAD</button>
+      </section>
+
+      <section class="quote-panel">
+        <div class="quote-row">
+          <span>PRICE</span>
+          <strong id="priceValue">--</strong>
+        </div>
+        <div class="quote-row">
+          <span>CHANGE</span>
+          <strong id="changeValue">--</strong>
+        </div>
+        <div class="quote-row">
+          <span>UPDATED</span>
+          <strong id="updatedValue">--</strong>
+        </div>
+      </section>
+
+      <section class="range-panel">
+        <button class="range-btn active" data-range="1H">1H</button>
+        <button class="range-btn" data-range="1D">1D</button>
+        <button class="range-btn" data-range="1W">1W</button>
+        <button class="range-btn" data-range="1M">1M</button>
+        <button class="range-btn" data-range="1Y">1Y</button>
+        <button class="range-btn" data-range="ALL">ALL</button>
+      </section>
+
+      <section class="chart-panel">
+        <canvas id="chartCanvas" width="1000" height="420" aria-label="Price chart"></canvas>
+        <div class="chart-meta">
+          <span id="minLabel">MIN: --</span>
+          <span id="maxLabel">MAX: --</span>
+          <span id="pointsLabel">POINTS: 0</span>
+        </div>
+      </section>
+
+      <footer class="footnote">
+        <span>DATA: ALPHA VANTAGE</span>
+        <span>STYLE: MONO///RETRO</span>
+      </footer>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
