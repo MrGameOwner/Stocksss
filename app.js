@@ -34,15 +34,15 @@ function fmt(n) {
   });
 }
 
-function parseSeriesObject(seriesObj) {
-  return Object.entries(seriesObj)
-    .map(([time, values]) => ({
-      time: new Date(time),
-      open: Number(values["1. open"]),
-      high: Number(values["2. high"]),
-      low: Number(values["3. low"]),
-      close: Number(values["4. close"]),
-      volume: Number(values["5. volume"] || 0),
+function parseAggResults(results = []) {
+  return results
+    .map((r) => ({
+      time: new Date(r.t),
+      open: Number(r.o),
+      high: Number(r.h),
+      low: Number(r.l),
+      close: Number(r.c),
+      volume: Number(r.v || 0),
     }))
     .sort((a, b) => a.time - b.time);
 }
@@ -148,98 +148,16 @@ function drawChart(points) {
   pointsLabel.textContent = `POINTS: ${points.length}`;
 }
 
-function updateQuoteFromGlobalQuote(globalQuote) {
-  if (!globalQuote) return;
+function updateQuoteFromLastTrade(lastTrade) {
+  if (!lastTrade) return;
+  const p = lastTrade.p;
+  const ts = lastTrade.t ? new Date(lastTrade.t) : null;
 
-  const p = globalQuote["05. price"];
-  const c = globalQuote["09. change"];
-  const cp = globalQuote["10. change percent"];
-  const d = globalQuote["07. latest trading day"];
-
-  priceValue.textContent = p ? `$ ${fmt(p)}` : "--";
-  changeValue.textContent = c && cp ? `${fmt(c)} | ${cp}` : "--";
-  updatedValue.textContent = d || "--";
+  priceValue.textContent = Number.isFinite(p) ? `$ ${fmt(p)}` : "--";
+  updatedValue.textContent = ts ? ts.toLocaleString() : "--";
 }
 
-async function fetchData() {
-  const symbol = symbolInput.value.trim().toUpperCase();
-  const key = apiKeyInput.value.trim();
-
-  if (!symbol || !key) {
-    setStatus("ERROR: ENTER SYMBOL + API KEY");
-    return;
-  }
-
-  state.symbol = symbol;
-  setStatus("LOADING...");
-
-  try {
-    const quoteUrl =
-      `https://www.alphavantage.co/query?function=GLOBAL_QUOTE&symbol=${encodeURIComponent(symbol)}&apikey=${encodeURIComponent(key)}`;
-
-    const intraUrl =
-      `https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol=${encodeURIComponent(symbol)}&interval=5min&outputsize=full&apikey=${encodeURIComponent(key)}`;
-
-    const dailyUrl =
-      `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY_ADJUSTED&symbol=${encodeURIComponent(symbol)}&outputsize=full&apikey=${encodeURIComponent(key)}`;
-
-    const [quoteRes, intraRes, dailyRes] = await Promise.all([
-      fetch(quoteUrl),
-      fetch(intraUrl),
-      fetch(dailyUrl),
-    ]);
-
-    const [quoteJson, intraJson, dailyJson] = await Promise.all([
-      quoteRes.json(),
-      intraRes.json(),
-      dailyRes.json(),
-    ]);
-
-    if (quoteJson["Note"] || intraJson["Note"] || dailyJson["Note"]) {
-      setStatus("RATE LIMITED: WAIT + RETRY");
-      return;
-    }
-
-    if (quoteJson["Error Message"] || intraJson["Error Message"] || dailyJson["Error Message"]) {
-      setStatus("ERROR: INVALID SYMBOL OR KEY");
-      return;
-    }
-
-    const quote = quoteJson["Global Quote"];
-    const intraSeries = intraJson["Time Series (5min)"] || {};
-    const dailySeries = dailyJson["Time Series (Daily)"] || {};
-
-    state.rawIntraday = parseSeriesObject(intraSeries);
-    state.rawDaily = parseSeriesObject(dailySeries);
-
-    updateQuoteFromGlobalQuote(quote);
-
-    const points = filterByRange(state.range, state.rawIntraday, state.rawDaily);
-    drawChart(points);
-
-    setStatus(`OK: ${symbol} /// ${state.range}`);
-  } catch (err) {
-    console.error(err);
-    setStatus("ERROR: NETWORK OR API FAILURE");
-  }
-}
-
-rangeButtons.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    rangeButtons.forEach((b) => b.classList.remove("active"));
-    btn.classList.add("active");
-
-    state.range = btn.dataset.range;
-
-    const points = filterByRange(state.range, state.rawIntraday, state.rawDaily);
-    drawChart(points);
-    setStatus(`OK: ${state.symbol} /// ${state.range}`);
-  });
-});
-
-loadBtn.addEventListener("click", fetchData);
-
-window.addEventListener("resize", () => {
-  const points = filterByRange(state.range, state.rawIntraday, state.rawDaily);
-  drawChart(points);
-});
+function updateChangeFromDailyBars(dailyBars) {
+  if (!dailyBars || dailyBars.length < 2) {
+    changeValue.text*
+
