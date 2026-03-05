@@ -197,22 +197,13 @@ async function fetchData() {
   try {
     const base = "https://api.polygon.io";
 
-    // Use only aggregates endpoints (more likely available on basic/free plans)
     const intraFrom = isoDate(3);
     const intraTo = isoDate(0);
-    const intraUrl = `${base}/v2/aggs/ticker/${encodeURIComponent(
-      symbol
-    )}/range/5/minute/${intraFrom}/${intraTo}?adjusted=true&sort=asc&limit=50000&apiKey=${encodeURIComponent(
-      key
-    )}`;
+    const intraUrl = `${base}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/5/minute/${intraFrom}/${intraTo}?adjusted=true&sort=asc&limit=50000&apiKey=${encodeURIComponent(key)}`;
 
     const dailyFrom = isoDate(730);
     const dailyTo = isoDate(0);
-    const dailyUrl = `${base}/v2/aggs/ticker/${encodeURIComponent(
-      symbol
-    )}/range/1/day/${dailyFrom}/${dailyTo}?adjusted=true&sort=asc&limit=50000&apiKey=${encodeURIComponent(
-      key
-    )}`;
+    const dailyUrl = `${base}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${dailyFrom}/${dailyTo}?adjusted=true&sort=asc&limit=50000&apiKey=${encodeURIComponent(key)}`;
 
     const [intraJson, dailyJson] = await Promise.all([
       fetchJson(intraUrl),
@@ -222,5 +213,66 @@ async function fetchData() {
     const intraResults = intraJson?.results || [];
     const dailyResults = dailyJson?.results || [];
 
-    state.rawIntraday = parse*
-
+    state.rawIntraday = parseAggResults(intraResults);
+    state.rawDaily = parseAggResults(dailyResults);
+
+    const latestPoint =
+      state.rawIntraday[state.rawIntraday.length - 1] ||
+      state.rawDaily[state.rawDaily.length - 1] ||
+      null;
+
+    if (latestPoint) {
+      if (priceValue) priceValue.textContent = `$ ${fmt(latestPoint.close)}`;
+      if (updatedValue) updatedValue.textContent = latestPoint.time.toLocaleString();
+    } else {
+      if (priceValue) priceValue.textContent = "--";
+      if (updatedValue) updatedValue.textContent = "--";
+    }
+
+    updateChangeFromDailyBars(state.rawDaily);
+
+    const points = filterByRange(state.range, state.rawIntraday, state.rawDaily);
+    drawChart(points);
+
+    setStatus(`OK: ${symbol} /// ${state.range}`);
+  } catch (err) {
+    console.error(err);
+    const msg = String(err?.message || "").toLowerCase();
+
+    if (msg.includes("not entitled")) {
+      setStatus("ERROR: PLAN DOESN'T INCLUDE THIS ENDPOINT");
+      return;
+    }
+    if (msg.includes("api key") || msg.includes("auth") || msg.includes("not authorized")) {
+      setStatus("ERROR: INVALID API KEY");
+      return;
+    }
+    if (msg.includes("429") || msg.includes("rate")) {
+      setStatus("RATE LIMITED: WAIT + RETRY");
+      return;
+    }
+
+    setStatus("ERROR: NETWORK OR API FAILURE");
+  }
+}
+
+rangeButtons.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    rangeButtons.forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+
+    state.range = btn.dataset.range;
+    const points = filterByRange(state.range, state.rawIntraday, state.rawDaily);
+    drawChart(points);
+    setStatus(`OK: ${state.symbol} /// ${state.range}`);
+  });
+});
+
+if (loadBtn) {
+  loadBtn.addEventListener("click", fetchData);
+}
+
+window.addEventListener("resize", () => {
+  const points = filterByRange(state.range, state.rawIntraday, state.rawDaily);
+  drawChart(points);
+});
