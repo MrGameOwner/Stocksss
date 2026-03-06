@@ -60,14 +60,24 @@
         <span>DATA: MASSIVE.COM</span>
         <span>STYLE: MONO///RETRO</span>
       </footer>
-        <section class="movers-panel">
-  <div class="movers-head">
-    <span>TOP 20 MOVERS /// TODAY</span>
-    <button id="refreshMoversBtn" type="button">REFRESH</button>
-  </div>
-  <div id="moversStatus" class="movers-status">READY</div>
-  <div class="movers-table" id="moversTable"></div>
-</section>
+
+      <!-- New: Top movers section (scroll below main chart to see) -->
+      <section class="movers-panel">
+        <div class="movers-head">
+          <span>TOP 20 MOVERS /// WATCHLIST (FREE MODE)</span>
+          <button id="refreshMoversBtn" type="button">REFRESH</button>
+        </div>
+        <div id="moversStatus" class="movers-status">READY</div>
+        <div class="movers-table" id="moversTable"></div>
+      </section>
+
+      <!-- New: Premium-only details -->
+      <section class="premium-panel">
+        <div class="movers-head">
+          <span>PREMIUM DATA DETAILS</span>
+        </div>
+        <div id="premiumDetails"></div>
+      </section>
     </main>
 
     <script src="app.js"></script>
