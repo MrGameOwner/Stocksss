@@ -192,3 +192,12 @@ button:hover {
     border-bottom: none;
   }
 }
+button, input, label, .controls, .range-panel {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 9999;
+}
+
+canvas {
+  pointer-events: none !important;
+}
