@@ -16,6 +16,11 @@ const ctx = canvas ? canvas.getContext("2d") : null;
 
 const rangeButtons = Array.from(document.querySelectorAll(".range-btn"));
 
+// Movers panel elements (new)
+const moversTable = document.getElementById("moversTable");
+const moversStatus = document.getElementById("moversStatus");
+const refreshMoversBtn = document.getElementById("refreshMoversBtn");
+
 const state = {
   range: "1H",
   symbol: "IBM",
@@ -25,6 +30,10 @@ const state = {
 
 function setStatus(text) {
   if (statusText) statusText.textContent = text;
+}
+
+function setMoversStatus(text) {
+  if (moversStatus) moversStatus.textContent = text;
 }
 
 function fmt(n) {
@@ -182,6 +191,90 @@ function isoDate(daysAgo = 0) {
   return d.toISOString().slice(0, 10);
 }
 
+function renderMovers(rows) {
+  if (!moversTable) return;
+
+  const header = `
+    <div class="movers-row head">
+      <span>SYMBOL</span>
+      <span>PRICE</span>
+      <span>CHANGE</span>
+      <span>%</span>
+    </div>
+  `;
+
+  const body = rows
+    .slice(0, 20)
+    .map((r) => {
+      const cls = r.change >= 0 ? "up" : "down";
+      const sign = r.change >= 0 ? "+" : "";
+      return `
+        <div class="movers-row">
+          <span>${r.symbol}</span>
+          <span>$ ${fmt(r.price)}</span>
+          <span class="${cls}">${sign}${fmt(r.change)}</span>
+          <span class="${cls}">${sign}${r.pct.toFixed(2)}%</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  moversTable.innerHTML = header + body;
+}
+
+async function fetchTopMovers() {
+  if (!moversTable || !moversStatus) return;
+
+  const key = (apiKeyInput?.value || "").trim();
+  if (!key) {
+    setMoversStatus("ENTER API KEY, THEN REFRESH");
+    return;
+  }
+
+  setMoversStatus("LOADING MOVERS...");
+
+  try {
+    const base = "https://api.polygon.io";
+    const url = `${base}/v2/snapshot/locale/us/markets/stocks/gainers?apiKey=${encodeURIComponent(key)}`;
+    const json = await fetchJson(url);
+
+    const tickers = json?.tickers || [];
+    const rows = tickers.map((t) => {
+      const day = t.day || {};
+      const prev = t.prevDay || {};
+      const price = Number(day.c || 0);
+      const prevClose = Number(prev.c || 0);
+      const change = price - prevClose;
+      const pct = prevClose ? (change / prevClose) * 100 : 0;
+      return {
+        symbol: t.ticker,
+        price,
+        change,
+        pct,
+      };
+    });
+
+    rows.sort((a, b) => b.pct - a.pct);
+    renderMovers(rows);
+    setMoversStatus(`OK: ${Math.min(rows.length, 20)} SHOWN`);
+  } catch (err) {
+    console.error(err);
+    const msg = String(err?.message || "").toLowerCase();
+
+    if (msg.includes("not entitled")) {
+      setMoversStatus("MOVERS UNAVAILABLE ON CURRENT PLAN");
+    } else if (msg.includes("429") || msg.includes("rate")) {
+      setMoversStatus("RATE LIMITED: WAIT + RETRY");
+    } else if (msg.includes("api key") || msg.includes("auth")) {
+      setMoversStatus("INVALID API KEY");
+    } else {
+      setMoversStatus("FAILED TO LOAD MOVERS");
+    }
+
+    moversTable.innerHTML = "";
+  }
+}
+
 async function fetchData() {
   const symbol = (symbolInput?.value || "").trim().toUpperCase();
   const key = (apiKeyInput?.value || "").trim();
@@ -197,6 +290,7 @@ async function fetchData() {
   try {
     const base = "https://api.polygon.io";
 
+    // Aggregate endpoints only (avoids last-trade entitlement issues)
     const intraFrom = isoDate(3);
     const intraTo = isoDate(0);
     const intraUrl = `${base}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/5/minute/${intraFrom}/${intraTo}?adjusted=true&sort=asc&limit=50000&apiKey=${encodeURIComponent(key)}`;
@@ -235,6 +329,9 @@ async function fetchData() {
     drawChart(points);
 
     setStatus(`OK: ${symbol} /// ${state.range}`);
+
+    // Also refresh movers when main data loads
+    fetchTopMovers();
   } catch (err) {
     console.error(err);
     const msg = String(err?.message || "").toLowerCase();
@@ -272,7 +369,16 @@ if (loadBtn) {
   loadBtn.addEventListener("click", fetchData);
 }
 
+if (refreshMoversBtn) {
+  refreshMoversBtn.addEventListener("click", fetchTopMovers);
+}
+
 window.addEventListener("resize", () => {
   const points = filterByRange(state.range, state.rawIntraday, state.rawDaily);
   drawChart(points);
+});
+
+window.addEventListener("load", () => {
+  setStatus("READY");
+  if (moversStatus) setMoversStatus("READY");
 });
