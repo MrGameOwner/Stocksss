@@ -380,5 +380,5 @@ window.addEventListener("resize", () => {
 
 window.addEventListener("load", () => {
   setStatus("READY");
-  if (moversStatus) setMoversStatus("READY");
+  if (moversStatus) setMoversStatus("ENTER API KEY, THEN REFRESH");
 });
