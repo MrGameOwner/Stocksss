@@ -16,10 +16,17 @@ const ctx = canvas ? canvas.getContext("2d") : null;
 
 const rangeButtons = Array.from(document.querySelectorAll(".range-btn"));
 
-// Movers panel elements (new)
+// Movers & premium panel
 const moversTable = document.getElementById("moversTable");
 const moversStatus = document.getElementById("moversStatus");
 const refreshMoversBtn = document.getElementById("refreshMoversBtn");
+const premiumDetails = document.getElementById("premiumDetails");
+
+const WATCHLIST = [
+  "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AMD","NFLX","COIN",
+  "PLTR","INTC","CSCO","ORCL","CRM","UBER","SHOP","PYPL","DIS","BA",
+  "JPM","BAC","WFC","GS","XOM","CVX","PFE","MRNA","NKE","SQ"
+];
 
 const state = {
   range: "1H",
@@ -222,7 +229,47 @@ function renderMovers(rows) {
   moversTable.innerHTML = header + body;
 }
 
-async function fetchTopMovers() {
+function renderPremiumDetails() {
+  if (!premiumDetails) return;
+  premiumDetails.innerHTML = `
+    <div class="premium-card">
+      <div><strong>PREMIUM FEATURES (HIGHER PLAN)</strong></div>
+      <ul>
+        <li>Real-time market-wide top gainers/losers snapshots</li>
+        <li>Last trade / NBBO quote endpoints with lower latency</li>
+        <li>Broader universe scanning beyond watchlist</li>
+        <li>Higher request rates and fewer throttling events</li>
+        <li>More advanced market data products</li>
+      </ul>
+    </div>
+  `;
+}
+
+async function fetchOneSymbolDailyChange(symbol, key) {
+  const base = "https://api.polygon.io";
+  const from = isoDate(10);
+  const to = isoDate(0);
+
+  const url = `${base}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/1/day/${from}/${to}?adjusted=true&sort=asc&limit=50&apiKey=${encodeURIComponent(key)}`;
+  const json = await fetchJson(url);
+  const daily = parseAggResults(json?.results || []);
+
+  if (daily.length < 2) return null;
+
+  const prev = daily[daily.length - 2].close;
+  const curr = daily[daily.length - 1].close;
+  const change = curr - prev;
+  const pct = prev ? (change / prev) * 100 : 0;
+
+  return {
+    symbol,
+    price: curr,
+    change,
+    pct,
+  };
+}
+
+async function fetchTopMoversFree() {
   if (!moversTable || !moversStatus) return;
 
   const key = (apiKeyInput?.value || "").trim();
@@ -231,47 +278,18 @@ async function fetchTopMovers() {
     return;
   }
 
-  setMoversStatus("LOADING MOVERS...");
+  setMoversStatus("SCANNING WATCHLIST (FREE MODE)...");
 
-  try {
-    const base = "https://api.polygon.io";
-    const url = `${base}/v2/snapshot/locale/us/markets/stocks/gainers?apiKey=${encodeURIComponent(key)}`;
-    const json = await fetchJson(url);
+  const tasks = WATCHLIST.map((sym) => fetchOneSymbolDailyChange(sym, key).catch(() => null));
+  const results = await Promise.all(tasks);
 
-    const tickers = json?.tickers || [];
-    const rows = tickers.map((t) => {
-      const day = t.day || {};
-      const prev = t.prevDay || {};
-      const price = Number(day.c || 0);
-      const prevClose = Number(prev.c || 0);
-      const change = price - prevClose;
-      const pct = prevClose ? (change / prevClose) * 100 : 0;
-      return {
-        symbol: t.ticker,
-        price,
-        change,
-        pct,
-      };
-    });
+  const rows = results.filter(Boolean).sort((a, b) => b.pct - a.pct);
+  renderMovers(rows);
 
-    rows.sort((a, b) => b.pct - a.pct);
-    renderMovers(rows);
-    setMoversStatus(`OK: ${Math.min(rows.length, 20)} SHOWN`);
-  } catch (err) {
-    console.error(err);
-    const msg = String(err?.message || "").toLowerCase();
-
-    if (msg.includes("not entitled")) {
-      setMoversStatus("MOVERS UNAVAILABLE ON CURRENT PLAN");
-    } else if (msg.includes("429") || msg.includes("rate")) {
-      setMoversStatus("RATE LIMITED: WAIT + RETRY");
-    } else if (msg.includes("api key") || msg.includes("auth")) {
-      setMoversStatus("INVALID API KEY");
-    } else {
-      setMoversStatus("FAILED TO LOAD MOVERS");
-    }
-
-    moversTable.innerHTML = "";
+  if (rows.length === 0) {
+    setMoversStatus("NO DATA / RATE LIMITED");
+  } else {
+    setMoversStatus(`OK: TOP ${Math.min(rows.length, 20)} OF ${rows.length} WATCHLIST SYMBOLS`);
   }
 }
 
@@ -290,7 +308,6 @@ async function fetchData() {
   try {
     const base = "https://api.polygon.io";
 
-    // Aggregate endpoints only (avoids last-trade entitlement issues)
     const intraFrom = isoDate(3);
     const intraTo = isoDate(0);
     const intraUrl = `${base}/v2/aggs/ticker/${encodeURIComponent(symbol)}/range/5/minute/${intraFrom}/${intraTo}?adjusted=true&sort=asc&limit=50000&apiKey=${encodeURIComponent(key)}`;
@@ -330,16 +347,12 @@ async function fetchData() {
 
     setStatus(`OK: ${symbol} /// ${state.range}`);
 
-    // Also refresh movers when main data loads
-    fetchTopMovers();
+    // Free-mode movers from watchlist
+    fetchTopMoversFree();
   } catch (err) {
     console.error(err);
     const msg = String(err?.message || "").toLowerCase();
 
-    if (msg.includes("not entitled")) {
-      setStatus("ERROR: PLAN DOESN'T INCLUDE THIS ENDPOINT");
-      return;
-    }
     if (msg.includes("api key") || msg.includes("auth") || msg.includes("not authorized")) {
       setStatus("ERROR: INVALID API KEY");
       return;
@@ -370,7 +383,7 @@ if (loadBtn) {
 }
 
 if (refreshMoversBtn) {
-  refreshMoversBtn.addEventListener("click", fetchTopMovers);
+  refreshMoversBtn.addEventListener("click", fetchTopMoversFree);
 }
 
 window.addEventListener("resize", () => {
@@ -380,5 +393,6 @@ window.addEventListener("resize", () => {
 
 window.addEventListener("load", () => {
   setStatus("READY");
-  if (moversStatus) setMoversStatus("ENTER API KEY, THEN REFRESH");
+  setMoversStatus("ENTER API KEY, THEN REFRESH");
+  renderPremiumDetails();
 });
