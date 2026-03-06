@@ -21,6 +21,7 @@ const moversTable = document.getElementById("moversTable");
 const moversStatus = document.getElementById("moversStatus");
 const refreshMoversBtn = document.getElementById("refreshMoversBtn");
 const premiumDetails = document.getElementById("premiumDetails");
+const premiumSnapshot = document.getElementById("premiumSnapshot"); // NEW
 
 const WATCHLIST = [
   "AAPL","MSFT","NVDA","AMZN","GOOGL","META","TSLA","AMD","NFLX","COIN",
@@ -41,6 +42,10 @@ function setStatus(text) {
 
 function setMoversStatus(text) {
   if (moversStatus) moversStatus.textContent = text;
+}
+
+function setPremiumSnapshot(html) {
+  if (premiumSnapshot) premiumSnapshot.innerHTML = html;
 }
 
 function fmt(n) {
@@ -245,6 +250,67 @@ function renderPremiumDetails() {
   `;
 }
 
+// NEW: premium-only snapshot feature
+async function fetchPremiumSnapshotFeature() {
+  const key = (apiKeyInput?.value || "").trim();
+  const symbol = (symbolInput?.value || "AAPL").trim().toUpperCase();
+
+  if (!premiumSnapshot) return;
+
+  if (!key) {
+    setPremiumSnapshot("<div class='premium-card'>Enter API key to test Premium Snapshot.</div>");
+    return;
+  }
+
+  setPremiumSnapshot("<div class='premium-card'>Checking premium snapshot entitlement...</div>");
+
+  try {
+    const base = "https://api.polygon.io";
+    const url = `${base}/v2/snapshot/locale/us/markets/stocks/tickers/${encodeURIComponent(symbol)}?apiKey=${encodeURIComponent(key)}`;
+    const json = await fetchJson(url);
+
+    const t = json?.ticker || {};
+    const day = t?.day || {};
+    const prev = t?.prevDay || {};
+    const last = t?.lastTrade || {};
+
+    const price = Number(day.c || last.p || 0);
+    const prevClose = Number(prev.c || 0);
+    const chg = price - prevClose;
+    const pct = prevClose ? (chg / prevClose) * 100 : 0;
+    const sign = chg >= 0 ? "+" : "";
+
+    setPremiumSnapshot(`
+      <div class="premium-card">
+        <div><strong>PREMIUM SNAPSHOT (LIVE)</strong></div>
+        <div>Symbol: ${symbol}</div>
+        <div>Last/Close: $ ${fmt(price)}</div>
+        <div>Change: ${sign}${fmt(chg)} (${sign}${pct.toFixed(2)}%)</div>
+        <div>Volume: ${Number(day.v || 0).toLocaleString()}</div>
+      </div>
+    `);
+  } catch (err) {
+    const msg = String(err?.message || "").toLowerCase();
+    if (msg.includes("not entitled") || msg.includes("forbidden") || msg.includes("403")) {
+      setPremiumSnapshot(`
+        <div class="premium-card">
+          <div><strong>PREMIUM SNAPSHOT LOCKED</strong></div>
+          <div>Your current plan does not include snapshot entitlement.</div>
+          <div>Upgrade plan to unlock this feature.</div>
+        </div>
+      `);
+      return;
+    }
+
+    setPremiumSnapshot(`
+      <div class="premium-card">
+        <div><strong>PREMIUM SNAPSHOT ERROR</strong></div>
+        <div>${err.message || "Unknown error"}</div>
+      </div>
+    `);
+  }
+}
+
 async function fetchOneSymbolDailyChange(symbol, key) {
   const base = "https://api.polygon.io";
   const from = isoDate(10);
@@ -261,12 +327,7 @@ async function fetchOneSymbolDailyChange(symbol, key) {
   const change = curr - prev;
   const pct = prev ? (change / prev) * 100 : 0;
 
-  return {
-    symbol,
-    price: curr,
-    change,
-    pct,
-  };
+  return { symbol, price: curr, change, pct };
 }
 
 async function fetchTopMoversFree() {
@@ -287,7 +348,7 @@ async function fetchTopMoversFree() {
   renderMovers(rows);
 
   if (rows.length === 0) {
-    setMoversStatus("NO DATA / RATE LIMITED");
+    setMoversStatus("NO DATA (CHECK API KEY / RATE LIMIT / MARKET HOURS)");
   } else {
     setMoversStatus(`OK: TOP ${Math.min(rows.length, 20)} OF ${rows.length} WATCHLIST SYMBOLS`);
   }
@@ -347,8 +408,8 @@ async function fetchData() {
 
     setStatus(`OK: ${symbol} /// ${state.range}`);
 
-    // Free-mode movers from watchlist
     fetchTopMoversFree();
+    fetchPremiumSnapshotFeature(); // NEW
   } catch (err) {
     console.error(err);
     const msg = String(err?.message || "").toLowerCase();
@@ -378,13 +439,8 @@ rangeButtons.forEach((btn) => {
   });
 });
 
-if (loadBtn) {
-  loadBtn.addEventListener("click", fetchData);
-}
-
-if (refreshMoversBtn) {
-  refreshMoversBtn.addEventListener("click", fetchTopMoversFree);
-}
+if (loadBtn) loadBtn.addEventListener("click", fetchData);
+if (refreshMoversBtn) refreshMoversBtn.addEventListener("click", fetchTopMoversFree);
 
 window.addEventListener("resize", () => {
   const points = filterByRange(state.range, state.rawIntraday, state.rawDaily);
@@ -395,4 +451,5 @@ window.addEventListener("load", () => {
   setStatus("READY");
   setMoversStatus("ENTER API KEY, THEN REFRESH");
   renderPremiumDetails();
+  fetchPremiumSnapshotFeature(); // NEW
 });
