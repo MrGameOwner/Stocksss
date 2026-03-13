@@ -5,7 +5,10 @@
   --line: #f5f5f5;
   --accent: #ffffff;
 }
-
+#root, main, .app {
+  position: relative;
+  z-index: 1;
+}
 * {
   box-sizing: border-box;
 }
