@@ -31,7 +31,7 @@ const WATCHLIST = [
 
 const state = {
   range: "1H",
-  symbol: "IBM",
+  symbol: "NVDA",
   rawIntraday: [],
   rawDaily: [],
 };
